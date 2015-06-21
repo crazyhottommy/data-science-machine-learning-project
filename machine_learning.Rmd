@@ -20,7 +20,7 @@ training<- read.csv("pml-training.csv", stringsAsFactors = F)
 testing<- read.csv("pml-testing.csv", stringsAsFactors = F)
 ```
 
-### feature selection  
+### feature selection, Cross Validation and model buidling 
 
 ```{r}
 library(caret)
@@ -29,11 +29,12 @@ set.seed(333)
 str(training)
 ```
 
-** the first column is the entry number, the second column is the user_name. Let's remove them and some other non-sensor columns**  
+**the first column is the entry number, the second column is the user_name. Let's remove them and some other non-sensor columns**  
+
 see discussion on [forum](https://class.coursera.org/predmachlearn-015/forum/thread?thread_id=41)  
 Including the non-sensor columns will give you artifically high accuracy on your model, because they are highly correlated with the classe outcome.
 
-```{r}
+```{r cache=TRUE, warning=FALSE}
 library(dplyr)
 training<- select(training, c(-X,-user_name,-raw_timestamp_part_1, -raw_timestamp_part_2, -cvtd_timestamp, -new_window, -num_window))
 testing<- select(testing, c(-X,-user_name,-raw_timestamp_part_1, -raw_timestamp_part_2, -cvtd_timestamp, -new_window, -num_window))
@@ -75,18 +76,16 @@ training<- training[,!NA_col]
 
 testing<- testing[,!NA_col]
 
-```
+
 
 ### Cross Validation and model buidling 
+# I am going to use K-fold corss validation. 
+# 1. First, I will break training set into K subsets (in this case a 10-fold cross validation)  
+# 2. build the model/predictor on the remaining training data in each subset and applied to the test subset
+# 3. rebuild the data 10 times with the training and test subsets and average the findings
 
-I am going to use K-fold corss validation. 
-1. First, I will break training set into K subsets (in this case a 3-fold cross validation)  
-2. build the model/predictor on the remaining training data in each subset and applied to the test subset
-3. rebuild the data 10 times with the training and test subsets and average the findings
 
-```{r cache=TRUE}
 
-## there are some missing values, use k-nearest neighbors to impute the missing numeric values
 fitControl<- trainControl( ## 10-fold CV
                            method="cv",
                            number = 10)
@@ -98,7 +97,7 @@ cl <- makeCluster(detectCores())
 registerDoParallel(cl)
 
 
-## fit a model using random forest
+## fit a model using random forest, it takes 20mins using 4 cpus.
 
 rfFit1<- train(classe ~ ., data=training, method="rf", trControl=fitControl, verbose = FALSE)
 
@@ -116,10 +115,8 @@ print(importance)
 plot(importance)
 
 confusionMatrix(training$classe,predict(rfFit1,training))
-
+table(prediction=predict(rfFit1, training), training$classe)
 ```
-
-
 
 ### prediction on the testing data set
 
@@ -128,6 +125,7 @@ confusionMatrix(training$classe,predict(rfFit1,training))
 **out of sample error** = error resulted from applying your prediction algorithm to a new data set
 also known as generalization error  
 
+The random forest model is very accurate on the training data sets, I expect: 
 **in sample error < out of sample error**  
 reason is over-fitting: model too adapted/optimized for the initial dataset
 
